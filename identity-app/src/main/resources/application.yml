@@ -1,0 +1,2 @@
+server:
+  port: ${PORT:3004}            # identity-api:3004 inside the network platform (deployment.md)
