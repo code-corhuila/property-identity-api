@@ -78,4 +78,20 @@ class UserAccountTest {
         assertEquals(0, account.getFailedLogins());
         assertFalse(account.isLocked(NOW));
     }
+
+    @Test
+    void restoreRebuildsAStoredAccountAsItWas() {
+        java.util.UUID id = java.util.UUID.randomUUID();
+        Instant locked = NOW.plusSeconds(600);
+        UserAccount restored = UserAccount.restore(id, new Email("ana@example.com"), "$2a$12$hash", "Ana Pérez",
+                Role.HOST, 3, locked, NOW.minusSeconds(60), NOW);
+
+        assertEquals(id, restored.getId());
+        assertEquals(Role.HOST, restored.getRole());
+        assertEquals(3, restored.getFailedLogins());
+        assertEquals(locked, restored.getLockedUntil());
+        assertEquals(NOW.minusSeconds(60), restored.getCreatedAt());
+        assertEquals(NOW, restored.getUpdatedAt());
+        assertTrue(restored.isLocked(NOW));
+    }
 }
