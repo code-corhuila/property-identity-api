@@ -2,6 +2,7 @@ package co.edu.corhuila.property.identity.domain.model;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 /**
@@ -11,8 +12,9 @@ import java.util.UUID;
  */
 public class UserAccount {
 
-    static final int MAX_FAILED_LOGINS = 5;
-    static final Duration LOCK_DURATION = Duration.ofMinutes(15);
+    /** Public so the persistence adapter applies the same rule in one atomic UPDATE (models.md). */
+    public static final int MAX_FAILED_LOGINS = 5;
+    public static final Duration LOCK_DURATION = Duration.ofMinutes(15);
     private static final int MAX_FULL_NAME = 200;
 
     private final UUID id;
@@ -25,14 +27,24 @@ public class UserAccount {
     private final Instant createdAt;
     private Instant updatedAt;
 
-    private UserAccount(UUID id, Email email, String passwordHash, String fullName, Role role) {
+    /** Rebuilds an account the persistence adapter read: no rule runs, the data was valid when stored. */
+    public static UserAccount restore(UUID id, Email email, String passwordHash, String fullName, Role role,
+                                      int failedLogins, Instant lockedUntil, Instant createdAt, Instant updatedAt) {
+        UserAccount account = new UserAccount(id, email, passwordHash, fullName, role, createdAt);
+        account.failedLogins = failedLogins;
+        account.lockedUntil = lockedUntil;
+        account.updatedAt = updatedAt;
+        return account;
+    }
+
+    private UserAccount(UUID id, Email email, String passwordHash, String fullName, Role role, Instant createdAt) {
         this.id = id;
         this.email = email;
         this.passwordHash = passwordHash;
         this.fullName = fullName;
         this.role = role;
-        this.createdAt = Instant.now();
-        this.updatedAt = this.createdAt;
+        this.createdAt = createdAt;
+        this.updatedAt = createdAt;
     }
 
     /** HU-IDENT-001: a new account is always a GUEST. */
@@ -46,7 +58,9 @@ public class UserAccount {
         if (fullName == null || fullName.isBlank() || fullName.length() > MAX_FULL_NAME) {
             throw new DomainException("El nombre completo debe tener de 1 a " + MAX_FULL_NAME + " caracteres");
         }
-        return new UserAccount(UUID.randomUUID(), email, passwordHash, fullName.strip(), Role.GUEST);
+        // Microseconds: the precision PostgreSQL keeps, so a stored account reads back equal.
+        return new UserAccount(UUID.randomUUID(), email, passwordHash, fullName.strip(), Role.GUEST,
+                Instant.now().truncatedTo(ChronoUnit.MICROS));
     }
 
     /** E-14: only a GUEST becomes a HOST, and keeps everything a GUEST can do. */

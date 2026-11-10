@@ -3,11 +3,14 @@ package co.edu.corhuila.property.identity.app;
 import co.edu.corhuila.property.identity.adapter.in.http.AuthFilter;
 import co.edu.corhuila.property.identity.adapter.in.http.CorrelationFilter;
 import co.edu.corhuila.property.identity.adapter.in.http.Rs256Verifier;
+import co.edu.corhuila.property.identity.adapter.out.persistence.InMemoryUserAccountRepository;
+import co.edu.corhuila.property.identity.application.port.out.UserAccountRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -20,6 +23,16 @@ import org.springframework.core.Ordered;
  */
 @Configuration
 public class IdentityConfiguration {
+
+    /**
+     * In memory ONLY when PERSISTENCE=memory is set, for tests and local development:
+     * never by default (norm 5.5.2). The JDBC adapter of the schema identity comes next.
+     */
+    @Bean
+    @ConditionalOnProperty(name = "identity.persistence", havingValue = "memory")
+    UserAccountRepository userAccountRepository() {
+        return new InMemoryUserAccountRepository();
+    }
 
     /**
      * JWT_PUBLIC_KEY (the PEM itself; a one-line value with literal \n escapes, as
