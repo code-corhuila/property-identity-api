@@ -17,8 +17,9 @@ identity-core/       domain + application — NO Spring dependency
   application/port/in/     what the service offers
   application/port/out/    what it needs
   application/usecase/     one use case per business operation
-identity-adapters/   Spring Web adapters (and persistence, later)
+identity-adapters/   Spring Web adapters and the account store
   adapter/in/http/         RS256 verifier, auth and correlation filters, error envelope, /health
+  adapter/out/persistence/ where accounts are stored (in memory for now)
 identity-app/        Spring Boot application: the composition root
 deploy/             Dockerfile and this service's compose file
 ```
