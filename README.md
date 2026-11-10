@@ -17,9 +17,9 @@ identity-core/       domain + application — NO Spring dependency
   application/port/in/     what the service offers
   application/port/out/    what it needs
   application/usecase/     one use case per business operation
-identity-adapters/   Spring Web adapters and the account store
+identity-adapters/   Spring Web and JDBC adapters
   adapter/in/http/         RS256 verifier, auth and correlation filters, error envelope, /health
-  adapter/out/persistence/ where accounts are stored (in memory for now)
+  adapter/out/persistence/ the schema identity (JDBC); an in-memory twin only with PERSISTENCE=memory
 identity-app/        Spring Boot application: the composition root
 deploy/             Dockerfile and this service's compose file
 ```
@@ -43,6 +43,24 @@ Without Maven installed:
 
 ```bash
 docker run --rm -v "$PWD":/app -w /app maven:3.9-eclipse-temurin-21 mvn -B verify
+```
+
+### Storage and the integration tests
+
+The service stores accounts in the schema `identity`, connecting as `identity_app`
+(`.env.example` lists the variables); without `DATABASE_URL` it does not start. The
+in-memory adapters run only with `PERSISTENCE=memory`, set explicitly for the HTTP
+tests or a local trial: never in an environment (norm 5.5.2). The integration tests run against the
+real engine with the schema of `property-identity-db` applied, and only when
+`TEST_DATABASE_URL` is set; otherwise they are skipped (Annex C). CI prepares that
+database on every Pull Request. Locally, with `property-identity-db` cloned as a
+sibling (or `IDENTITY_DB_DIR` pointing to it):
+
+```bash
+scripts/test-db.sh            # PostgreSQL 16 on 127.0.0.1:55432 with the identity schema
+TEST_DATABASE_URL=jdbc:postgresql://localhost:55432/property TEST_DATABASE_USER=identity_app \
+  TEST_DATABASE_PASSWORD=test-only mvn -B verify
+scripts/test-db.sh down
 ```
 
 The image:
