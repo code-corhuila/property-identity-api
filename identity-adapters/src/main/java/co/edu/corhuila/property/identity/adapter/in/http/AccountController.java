@@ -1,6 +1,7 @@
 package co.edu.corhuila.property.identity.adapter.in.http;
 
 import co.edu.corhuila.property.identity.adapter.in.http.AccountViews.AuthResponse;
+import co.edu.corhuila.property.identity.adapter.in.http.AccountViews.UserContact;
 import co.edu.corhuila.property.identity.adapter.in.http.AccountViews.UserSummary;
 import co.edu.corhuila.property.identity.adapter.in.http.ApiError.FieldError;
 import co.edu.corhuila.property.identity.adapter.in.http.ApiError.ValidationException;
@@ -10,10 +11,12 @@ import co.edu.corhuila.property.identity.application.port.in.AccountUseCases.Reg
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.regex.Pattern;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -21,7 +24,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * E-10 POST /register, E-25 GET /users/me and E-14 POST /users/me/upgrade-to-host. Validates the SHAPE of the input
+ * E-10 POST /register, E-25 GET /users/me, E-14 POST /users/me/upgrade-to-host and E-26
+ * GET /users/{id}/contact. Validates the SHAPE of the input
  * (identity-service.yaml) and holds no business rule.
  */
 @RestController
@@ -37,12 +41,14 @@ public class AccountController {
     private final AccountUseCases.Register register;
     private final AccountUseCases.GetMe getMe;
     private final AccountUseCases.UpgradeToHost upgrade;
+    private final AccountUseCases.GetContact contact;
 
     public AccountController(AccountUseCases.Register register, AccountUseCases.GetMe getMe,
-                             AccountUseCases.UpgradeToHost upgrade) {
+                             AccountUseCases.UpgradeToHost upgrade, AccountUseCases.GetContact contact) {
         this.register = register;
         this.getMe = getMe;
         this.upgrade = upgrade;
+        this.contact = contact;
     }
 
     @PostMapping("/register")
@@ -80,6 +86,17 @@ public class AccountController {
     @PostMapping("/users/me/upgrade-to-host")
     public UserSummary upgradeToHost(HttpServletRequest request) {
         return UserSummary.of(upgrade.upgradeToHost(AccountViews.caller(request)));
+    }
+
+    @GetMapping("/users/{id}/contact")
+    public UserContact contact(@PathVariable("id") String id, HttpServletRequest request) {
+        UUID accountId;
+        try {
+            accountId = UUID.fromString(id);
+        } catch (IllegalArgumentException e) {
+            throw new ValidationException("the id is not a UUID", List.of(new FieldError("id", "must be a UUID")));
+        }
+        return UserContact.of(contact.getContact(AccountViews.caller(request), accountId));
     }
 
     static void requireKey(String key, List<FieldError> problems) {
