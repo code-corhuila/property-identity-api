@@ -4,13 +4,13 @@ import co.edu.corhuila.property.identity.adapter.in.http.AuthFilter;
 import co.edu.corhuila.property.identity.adapter.in.http.CorrelationFilter;
 import co.edu.corhuila.property.identity.adapter.in.http.Rs256Verifier;
 import co.edu.corhuila.property.identity.adapter.out.persistence.InMemoryUserAccountRepository;
+import co.edu.corhuila.property.identity.adapter.out.persistence.JdbcUserAccountRepository;
 import co.edu.corhuila.property.identity.application.port.out.UserAccountRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -25,13 +25,24 @@ import org.springframework.core.Ordered;
 public class IdentityConfiguration {
 
     /**
-     * In memory ONLY when PERSISTENCE=memory is set, for tests and local development:
-     * never by default (norm 5.5.2). The JDBC adapter of the schema identity comes next.
+     * PERSISTENCE=postgres (the default) needs DATABASE_URL, DATABASE_USER (identity_app
+     * in the platform) and DATABASE_PASSWORD: without them the service does not start.
+     * PERSISTENCE=memory is for tests and local development only (norm 5.5.2).
      */
     @Bean
-    @ConditionalOnProperty(name = "identity.persistence", havingValue = "memory")
-    UserAccountRepository userAccountRepository() {
-        return new InMemoryUserAccountRepository();
+    Storage storage(@Value("${identity.persistence:postgres}") String persistence,
+                    @Value("${identity.database.url:}") String url,
+                    @Value("${identity.database.user:}") String user,
+                    @Value("${identity.database.password:}") String password,
+                    @Value("${identity.database.pool-max:10}") int poolMax,
+                    @Value("${identity.database.statement-timeout-ms:5000}") int statementTimeoutMs) {
+        return Storage.connect(persistence, url, user, password, poolMax, statementTimeoutMs);
+    }
+
+    @Bean
+    UserAccountRepository userAccountRepository(Storage storage) {
+        return storage.inMemory() ? new InMemoryUserAccountRepository()
+                : new JdbcUserAccountRepository(storage.jdbc(), storage.tx());
     }
 
     /**

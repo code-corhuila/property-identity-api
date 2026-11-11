@@ -9,6 +9,10 @@ services:
       PORT: "3004"
       # Public key of identity-service, one line with \n escapes. Never versioned.
       JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY:?set JWT_PUBLIC_KEY}
+      # The schema identity of the single PostgreSQL instance, as identity_app (Annex J.7).
+      DATABASE_URL: jdbc:postgresql://postgres:5432/${PG_DATABASE:?set PG_DATABASE}
+      DATABASE_USER: identity_app
+      DATABASE_PASSWORD: ${IDENTITY_APP_PASSWORD:?set IDENTITY_APP_PASSWORD}
     # expose, not ports: only the gateway is reachable from the host.
     expose: ["3004"]
     networks: [platform]
