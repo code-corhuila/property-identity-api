@@ -3,13 +3,22 @@ package co.edu.corhuila.property.identity.app;
 import co.edu.corhuila.property.identity.adapter.in.http.AuthFilter;
 import co.edu.corhuila.property.identity.adapter.in.http.CorrelationFilter;
 import co.edu.corhuila.property.identity.adapter.in.http.Rs256Verifier;
+import co.edu.corhuila.property.identity.adapter.out.persistence.InMemoryRefreshTokenRepository;
 import co.edu.corhuila.property.identity.adapter.out.persistence.InMemoryUserAccountRepository;
+import co.edu.corhuila.property.identity.adapter.out.persistence.JdbcRefreshTokenRepository;
 import co.edu.corhuila.property.identity.adapter.out.persistence.JdbcUserAccountRepository;
+import co.edu.corhuila.property.identity.adapter.out.token.Rs256TokenSigner;
+import co.edu.corhuila.property.identity.adapter.out.token.RsaKeys;
+import co.edu.corhuila.property.identity.application.port.out.RefreshTokenRepository;
+import co.edu.corhuila.property.identity.application.port.out.TokenSigner;
 import co.edu.corhuila.property.identity.application.port.out.UserAccountRepository;
+import co.edu.corhuila.property.identity.application.usecase.SessionIssuer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.interfaces.RSAPrivateCrtKey;
+import java.security.interfaces.RSAPublicKey;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
@@ -53,9 +62,44 @@ public class IdentityConfiguration {
     @Bean
     Rs256Verifier tokenVerifier(@Value("${JWT_PUBLIC_KEY:}") String pem,
                                 @Value("${JWT_PUBLIC_KEY_FILE:}") String file) throws IOException {
-        String key = !pem.isBlank() ? pem.replace("\\n", "\n")
+        return new Rs256Verifier(pem(pem, file));
+    }
+
+    /** The same public key, for the published copy (E-15 GET /jwks). */
+    @Bean
+    RSAPublicKey publicKey(@Value("${JWT_PUBLIC_KEY:}") String pem,
+                           @Value("${JWT_PUBLIC_KEY_FILE:}") String file) throws IOException {
+        return RsaKeys.readPublic(pem(pem, file));
+    }
+
+    /**
+     * JWT_PRIVATE_KEY (PKCS#8 PEM, one line with \n escapes accepted) or
+     * JWT_PRIVATE_KEY_FILE. Identity is the only service that holds it. The service
+     * does not start without it, or when it is not the pair of JWT_PUBLIC_KEY.
+     */
+    @Bean
+    TokenSigner tokenSigner(@Value("${JWT_PRIVATE_KEY:}") String pem,
+                            @Value("${JWT_PRIVATE_KEY_FILE:}") String file, RSAPublicKey publicKey) throws IOException {
+        RSAPrivateCrtKey privateKey = RsaKeys.readPrivate(pem(pem, file));
+        RsaKeys.requirePair(privateKey, publicKey);
+        return new Rs256TokenSigner(privateKey, RsaKeys.keyId(publicKey));
+    }
+
+    @Bean
+    RefreshTokenRepository refreshTokenRepository(Storage storage) {
+        return storage.inMemory() ? new InMemoryRefreshTokenRepository()
+                : new JdbcRefreshTokenRepository(storage.jdbc());
+    }
+
+    @Bean
+    SessionIssuer sessionIssuer(TokenSigner signer, RefreshTokenRepository refreshTokens) {
+        return new SessionIssuer(signer, refreshTokens);
+    }
+
+    /** A PEM given inline (literal \n escapes, as a .env file holds it) or as a file. */
+    private static String pem(String inline, String file) throws IOException {
+        return !inline.isBlank() ? inline.replace("\\n", "\n")
                 : !file.isBlank() ? Files.readString(Path.of(file)) : "";
-        return new Rs256Verifier(key);
     }
 
     @Bean
