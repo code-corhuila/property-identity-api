@@ -63,9 +63,9 @@ class IdentityHttpTest {
                 .andExpect(jsonPath("$.traceId", is("trace-401")));
     }
 
-    /** register, login and refresh need no token; their endpoints arrive in the next PRs. */
+    /** login and refresh need no token; their endpoints arrive in the next PRs (register: AccountHttpTest). */
     @ParameterizedTest
-    @ValueSource(strings = {"/api/v1/register", "/api/v1/login", "/api/v1/refresh"})
+    @ValueSource(strings = {"/api/v1/login", "/api/v1/refresh"})
     void thePublicRoutesDoNotAskForAToken(String path) throws Exception {
         mvc.perform(get(path))
                 .andExpect(status().isNotFound())

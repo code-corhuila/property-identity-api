@@ -7,11 +7,14 @@ import co.edu.corhuila.property.identity.adapter.out.persistence.InMemoryRefresh
 import co.edu.corhuila.property.identity.adapter.out.persistence.InMemoryUserAccountRepository;
 import co.edu.corhuila.property.identity.adapter.out.persistence.JdbcRefreshTokenRepository;
 import co.edu.corhuila.property.identity.adapter.out.persistence.JdbcUserAccountRepository;
+import co.edu.corhuila.property.identity.adapter.out.security.BcryptPasswordHasher;
 import co.edu.corhuila.property.identity.adapter.out.token.Rs256TokenSigner;
 import co.edu.corhuila.property.identity.adapter.out.token.RsaKeys;
+import co.edu.corhuila.property.identity.application.port.out.PasswordHasher;
 import co.edu.corhuila.property.identity.application.port.out.RefreshTokenRepository;
 import co.edu.corhuila.property.identity.application.port.out.TokenSigner;
 import co.edu.corhuila.property.identity.application.port.out.UserAccountRepository;
+import co.edu.corhuila.property.identity.application.usecase.AccountService;
 import co.edu.corhuila.property.identity.application.usecase.SessionIssuer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
@@ -19,6 +22,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.interfaces.RSAPrivateCrtKey;
 import java.security.interfaces.RSAPublicKey;
+import java.time.Clock;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
@@ -52,6 +56,17 @@ public class IdentityConfiguration {
     UserAccountRepository userAccountRepository(Storage storage) {
         return storage.inMemory() ? new InMemoryUserAccountRepository()
                 : new JdbcUserAccountRepository(storage.jdbc(), storage.tx());
+    }
+
+    /** PASSWORD_HASH_COST: the bcrypt cost, 12 by default and never less (A02). */
+    @Bean
+    PasswordHasher passwordHasher(@Value("${identity.password-hash-cost:12}") int cost) {
+        return new BcryptPasswordHasher(cost);
+    }
+
+    @Bean
+    AccountService accountService(UserAccountRepository accounts, PasswordHasher hasher, SessionIssuer sessions) {
+        return new AccountService(accounts, hasher, sessions, Clock.systemUTC());
     }
 
     /**
