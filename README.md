@@ -46,8 +46,9 @@ The service does not start without them, or when they are not one pair. `GET
 
 ## Service tokens (HU-IDENT-004)
 
-`property-workflow` and `property-worker` call the services with their own token:
-RS256, `sub` = `svc-workflow` or `svc-worker`, `scope: service`, no `roles`, 30 days
+`property-workflow`, `property-worker` and `notification-service` call the services with
+their own token: RS256, `sub` = `svc-workflow`, `svc-worker` or `svc-notification`,
+`scope: service`, no `roles`, 30 days
 (`security-policy.md`, Service tokens). No endpoint issues it. Whoever holds the DevOps
 role runs the same jar with the keys of the environment; it prints the token and
 exits, without the web server or the database:
@@ -58,8 +59,13 @@ docker compose --env-file env/<env>.env run --rm identity-api --issue-service-to
 ```
 
 `SERVICE_TOKEN_TTL_DAYS` changes the lifetime. The token goes into
-`WORKFLOW_SERVICE_TOKEN` / `WORKER_SERVICE_TOKEN` of the environment; rotate it before
-it expires.
+`WORKFLOW_SERVICE_TOKEN` / `WORKER_SERVICE_TOKEN` / `NOTIFICATION_SERVICE_TOKEN` of the
+environment; rotate it before it expires.
+
+`svc-notification` is accepted only by `GET /api/v1/users/{id}/contact` (E-26, GAP-017):
+the e-mail and the name of an account, so Notification can write to the guest of an
+event. A person or any other service gets `403`; an unknown id, `404`. Each read is logged
+with the account id and the caller, never with the e-mail.
 
 ## Run
 
