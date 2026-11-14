@@ -56,7 +56,7 @@ class AccountServiceTest {
     };
 
     final FakeAccounts accounts = new FakeAccounts();
-    final SessionIssuer sessions = new SessionIssuer(claims -> "token", (u, h, e, n) -> { });
+    final SessionIssuer sessions = new SessionIssuer(claims -> "token", new FakeRefreshTokens());
     final AccountService service = new AccountService(accounts, HASHER, sessions,
             Clock.fixed(Instant.parse("2026-11-08T10:00:00Z"), ZoneOffset.UTC));
 
