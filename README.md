@@ -44,6 +44,23 @@ key (ADR-011, rule 4; `security-policy.md`). It needs both halves of the pair:
 The service does not start without them, or when they are not one pair. `GET
 /api/v1/jwks` publishes the public key with its `kid`. A key is never versioned.
 
+## Service tokens (HU-IDENT-004)
+
+`property-workflow` and `property-worker` call the services with their own token:
+RS256, `sub` = `svc-workflow` or `svc-worker`, `scope: service`, no `roles`, 30 days
+(`security-policy.md`, Service tokens). No endpoint issues it. Whoever holds the DevOps
+role runs the same jar with the keys of the environment; it prints the token and
+exits, without the web server or the database:
+
+```bash
+java -jar identity-app/target/identity-app-0.1.0.jar --issue-service-token=svc-workflow
+docker compose --env-file env/<env>.env run --rm identity-api --issue-service-token=svc-worker
+```
+
+`SERVICE_TOKEN_TTL_DAYS` changes the lifetime. The token goes into
+`WORKFLOW_SERVICE_TOKEN` / `WORKER_SERVICE_TOKEN` of the environment; rotate it before
+it expires.
+
 ## Run
 
 ```bash
