@@ -1,0 +1,414 @@
+openapi: 3.0.3
+info:
+  title: Identity Service API
+  version: 3.0.0
+  description: |
+    Generic Domain — registration, login, token renewal, sessions and roles
+    (GUEST, HOST, ADMIN). See 02-domain/domain-map.md. The service is
+    `identity-service`, never "auth-service" (07-api/guidelines.md, D-C11).
+
+    ## Authentication flow
+    1. `POST /register` — create an account (role GUEST)
+    2. `POST /login` — get an access token and a refresh token
+    3. Send the access token as `Authorization: Bearer` on every other operation
+    4. When the access token expires (1 h): `POST /refresh` with the refresh token
+    5. To close the session: `POST /logout`
+
+    The whole flow is narrated in 07-api/authentication.md.
+
+    ## Roles
+    The only roles are `GUEST`, `HOST` and `ADMIN`
+    (00-governance/security-policy.md). An account has exactly one. Every
+    new account is a `GUEST`; `POST /users/me/upgrade-to-host` makes it a
+    `HOST`, which keeps everything a `GUEST` can do. Managing properties is
+    out of scope in MVP 1 (01-context/scope.md, Out of Scope #1).
+
+    ## Tokens
+    - **Access token**: JWT signed with RS256, valid for 1 hour. Claims
+      `sub` (the user id), `roles`, `iat`, `exp` and `jti`.
+    - **Refresh token**: opaque, valid for 7 days and for a single use.
+    - **Service token**: the credential of property-workflow and
+      property-worker. It is issued by an operational command of this
+      service, not by an operation of this contract
+      (07-api/guidelines.md, D-C14).
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Through the API Gateway, in `develop` (05-architecture/deployment.md)
+  - url: http://identity-api:3004/api/v1
+    description: Inside the network `platform`
+
+security: []  # Most operations are public; the protected ones declare bearerAuth
+
+tags:
+  - name: Auth
+    description: Registration, login and sessions
+  - name: Users
+    description: Profile and change of role
+  - name: Keys
+    description: Public key that verifies the tokens
+  - name: Health
+    description: Health check of the service
+
+paths:
+  /health:
+    servers:
+      - url: http://identity-api:3004
+        description: At the root of the service, outside `/api/v1` and not routed by the gateway
+    get:
+      summary: Health check
+      description: >
+        Answers without a token (norm 5.3.12). A dependency that is down is
+        reported inside the `200` body (07-api/guidelines.md, D-C6).
+      operationId: getHealth
+      tags: [Health]
+      security: []
+      responses:
+        '200':
+          description: The service is running
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [ok, degraded]
+                  timestamp:
+                    $ref: './_shared.yaml#/components/schemas/Timestamp'
+                  dependencies:
+                    type: object
+                    description: Identity only depends on its schema `identity` in PostgreSQL.
+                    properties:
+                      database:
+                        type: string
+                        enum: [ok, degraded, down]
+              example:
+                status: ok
+                timestamp: '2024-01-15T10:30:00Z'
+                dependencies:
+                  database: ok
+
+  /register:
+    post:
+      summary: Register a new user
+      description: The account is created with the role `GUEST`. Becoming a `HOST` is a later step — see `/users/me/upgrade-to-host`.
+      operationId: register
+      tags: [Auth]
+      parameters:
+        - $ref: './_shared.yaml#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            example:
+              email: guest@example.com
+              password: "SecurePass123!"
+              name: "María García"
+      responses:
+        '200':
+          description: >
+            The `Idempotency-Key` was already used — the account it created
+            is returned (07-api/guidelines.md, D-C7), without tokens: a
+            repeated key never opens a session. The client logs in.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSummary'
+        '201':
+          description: Account created, with the role GUEST
+          headers:
+            Location:
+              description: Route of the account created
+              schema:
+                type: string
+                example: /api/v1/users/me
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: './_shared.yaml#/components/responses/BadRequest'
+        '422':
+          description: The e-mail is already registered
+          content:
+            application/json:
+              schema:
+                $ref: './_shared.yaml#/components/schemas/ErrorResponse'
+              example:
+                error: BUSINESS_RULE_VIOLATION
+                message: the e-mail is already registered
+                traceId: 550e8400-e29b-41d4-a716-446655440000
+
+  /login:
+    post:
+      summary: Authenticate a user
+      operationId: login
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: guest@example.com
+              password: "SecurePass123!"
+      responses:
+        '200':
+          description: Access token and refresh token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: './_shared.yaml#/components/responses/BadRequest'
+        '401':
+          description: >
+            Wrong credentials, or the account is locked after 5 consecutive
+            failed attempts (00-governance/security-rules.md, A07). The
+            message is the same in both cases, so it does not reveal whether
+            the account exists. The limit of attempts per IP is applied by
+            the gateway, which answers `429` (api-gateway.yaml).
+          content:
+            application/json:
+              schema:
+                $ref: './_shared.yaml#/components/schemas/ErrorResponse'
+              example:
+                error: UNAUTHORIZED
+                message: wrong e-mail or password
+                traceId: 550e8400-e29b-41d4-a716-446655440000
+
+  /refresh:
+    post:
+      summary: Renew the access token
+      operationId: refreshToken
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+                  description: The refresh token of the login or of the last refresh
+      responses:
+        '200':
+          description: New tokens. The refresh token that was sent stops being valid (rotation).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: './_shared.yaml#/components/responses/BadRequest'
+        '401':
+          description: >
+            The refresh token is invalid, expired or already used. A reused
+            token revokes every session of the user (07-api/authentication.md).
+          content:
+            application/json:
+              schema:
+                $ref: './_shared.yaml#/components/schemas/ErrorResponse'
+
+  /logout:
+    post:
+      summary: Close the session
+      operationId: logout
+      tags: [Auth]
+      security:
+        - bearerAuth: []
+      description: >
+        The access token is not revoked: it expires by itself within the
+        hour. What is revoked is the refresh token, so the session cannot be
+        renewed. The body carries `refreshToken`, `allDevices: true`, or
+        both; with neither, the request is `400`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+                  description: The refresh token of the session to close
+                allDevices:
+                  type: boolean
+                  description: If true, every refresh token of the user is revoked
+                  default: false
+      responses:
+        '204':
+          description: Session closed
+        '400':
+          $ref: './_shared.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: './_shared.yaml#/components/responses/Unauthorized'
+
+  /users/me:
+    get:
+      summary: Get my account
+      description: Backend of the profile screen (12-ux-ui/navigation-map.md, route /perfil).
+      operationId: getMe
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The account of the user of the token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSummary'
+        '401':
+          $ref: './_shared.yaml#/components/responses/Unauthorized'
+
+  /users/me/upgrade-to-host:
+    post:
+      summary: Turn the user of the token (GUEST) into a HOST
+      description: >
+        Backend of "Convertirme en anfitrion" (12-ux-ui/navigation-map.md,
+        route /perfil/convertirme-en-anfitrion). It only changes the role of
+        the account: tokens issued from then on carry `HOST`. It enables no
+        property management, which is out of scope
+        (01-context/scope.md, Out of Scope #1).
+      operationId: upgradeToHost
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The account, now with the role HOST
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSummary'
+        '401':
+          $ref: './_shared.yaml#/components/responses/Unauthorized'
+        '422':
+          description: The account is not a GUEST — it is already a HOST, or it is an ADMIN
+          content:
+            application/json:
+              schema:
+                $ref: './_shared.yaml#/components/schemas/ErrorResponse'
+              example:
+                error: INVALID_STATUS_TRANSITION
+                message: the account already has the role HOST
+                traceId: 550e8400-e29b-41d4-a716-446655440000
+
+  /jwks:
+    get:
+      summary: Public key that verifies the tokens (JWKS)
+      description: >
+        The published copy of Identity's public key, in the standard JWKS
+        format. No service calls it while serving a request: each one
+        receives the key by configuration (`JWT_PUBLIC_KEY`) and validates
+        the token locally (07-api/guidelines.md, D-C11). It is where the key
+        of an environment is taken from when that configuration is written.
+      operationId: getJwks
+      tags: [Keys]
+      security: []
+      responses:
+        '200':
+          description: JSON Web Key Set
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      type: object
+                      description: JWK (RFC 7517)
+
+components:
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [email, password, name]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 255
+        password:
+          type: string
+          minLength: 8
+          maxLength: 100
+          description: At least 8 characters, one uppercase letter and one digit
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    AuthResponse:
+      type: object
+      required: [accessToken, refreshToken, expiresIn, user]
+      properties:
+        accessToken:
+          type: string
+          description: JWT signed with RS256. Sent in the `Authorization` header, as a Bearer token, on protected operations.
+        refreshToken:
+          type: string
+          description: Opaque token. Sent to `POST /refresh` when the access token expires.
+        expiresIn:
+          type: integer
+          description: Seconds until the access token expires
+          example: 3600
+        user:
+          $ref: '#/components/schemas/UserSummary'
+
+    UserSummary:
+      type: object
+      required: [id, email, roles]
+      properties:
+        id:
+          $ref: './_shared.yaml#/components/schemas/UUID'
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        roles:
+          type: array
+          description: >
+            Always exactly one element: an account has one role
+            (06-data/models.md). It is an array because the claim `roles` of
+            the token is an array too.
+          minItems: 1
+          maxItems: 1
+          items:
+            type: string
+            enum: [GUEST, HOST, ADMIN]
+          example: [GUEST]
+        permissions:
+          type: array
+          description: >
+            What the role allows, as `<resource>:<action>`. The list of each
+            role is in 00-governance/security-policy.md. A person has no
+            `reservas:create` and no `pagos:create`: those belong to the
+            service credential.
+          maxItems: 50
+          items:
+            type: string
+          example: ["propiedades:read", "sagas:create", "sagas:read", "reservas:read", "reservas:cancel", "pagos:read", "preferencias:read", "preferencias:update"]
+
+  securitySchemes:
+    bearerAuth:
+      $ref: './_shared.yaml#/components/securitySchemes/bearerAuth'
