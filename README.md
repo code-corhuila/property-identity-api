@@ -31,6 +31,19 @@ dependency rule stops being a convention and becomes a build error.
 The schema lives in `property-identity-db`; this service never migrates it. In the
 platform it connects as `identity_app` (Annex J, ADR-008).
 
+## Keys
+
+Identity signs every token with RS256 and is the only service that holds the private
+key (ADR-011, rule 4; `security-policy.md`). It needs both halves of the pair:
+
+| Variable | Content |
+|---|---|
+| `JWT_PRIVATE_KEY` or `JWT_PRIVATE_KEY_FILE` | The private key, PKCS#8 PEM (`openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048`). Inline, one line with literal `\n`, as a `.env` file holds it; or the path of the `.pem` file |
+| `JWT_PUBLIC_KEY` or `JWT_PUBLIC_KEY_FILE` | Its public key (`openssl pkey -pubout`), the same value every other service receives |
+
+The service does not start without them, or when they are not one pair. `GET
+/api/v1/jwks` publishes the public key with its `kid`. A key is never versioned.
+
 ## Run
 
 ```bash

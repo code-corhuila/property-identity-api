@@ -42,6 +42,8 @@ class IdentityHttpTest {
                 + Base64.getMimeEncoder().encodeToString(KEYS.getPublic().getEncoded())
                 + "\n-----END PUBLIC KEY-----\n";
         registry.add("JWT_PUBLIC_KEY", () -> pem);
+        registry.add("JWT_PRIVATE_KEY", () -> "-----BEGIN PRIVATE KEY-----\n"
+                + Base64.getMimeEncoder().encodeToString(KEYS.getPrivate().getEncoded()) + "\n-----END PRIVATE KEY-----\n");
     }
 
     @Test
@@ -61,9 +63,9 @@ class IdentityHttpTest {
                 .andExpect(jsonPath("$.traceId", is("trace-401")));
     }
 
-    /** register, login, refresh and jwks need no token; their endpoints arrive in the next batch. */
+    /** register, login and refresh need no token; their endpoints arrive in the next PRs. */
     @ParameterizedTest
-    @ValueSource(strings = {"/api/v1/register", "/api/v1/login", "/api/v1/refresh", "/api/v1/jwks"})
+    @ValueSource(strings = {"/api/v1/register", "/api/v1/login", "/api/v1/refresh"})
     void thePublicRoutesDoNotAskForAToken(String path) throws Exception {
         mvc.perform(get(path))
                 .andExpect(status().isNotFound())
