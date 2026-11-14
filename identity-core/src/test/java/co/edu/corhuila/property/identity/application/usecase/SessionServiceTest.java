@@ -13,6 +13,7 @@ import co.edu.corhuila.property.identity.application.port.in.NotAuthenticatedExc
 import co.edu.corhuila.property.identity.application.port.out.PasswordHasher;
 import co.edu.corhuila.property.identity.application.port.out.UserAccountRepository;
 import co.edu.corhuila.property.identity.domain.model.Email;
+import co.edu.corhuila.property.identity.domain.model.Role;
 import co.edu.corhuila.property.identity.domain.model.UserAccount;
 import java.time.Clock;
 import java.time.Duration;
@@ -44,6 +45,7 @@ class SessionServiceTest {
         @Override public Optional<UserAccount> findByEmail(Email e) { return Optional.of(ana).filter(a -> a.getEmail().equals(e)); }
         @Override public void recordFailedLogin(UUID id, Instant now) { ana.recordFailedLogin(now); }
         @Override public void recordSuccessfulLogin(UUID id, Instant now) { ana.recordSuccessfulLogin(now); }
+        @Override public boolean changeRole(UUID id, Role from, Role to, Instant now) { return false; }
     };
     final AtomicInteger comparisons = new AtomicInteger();
     final PasswordHasher hasher = new PasswordHasher() {
