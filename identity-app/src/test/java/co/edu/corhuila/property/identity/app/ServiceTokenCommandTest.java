@@ -66,7 +66,13 @@ class ServiceTokenCommandTest {
     }
 
     @Test
-    void onlyTheWorkflowAndTheWorkerGetOne() {
+    void notificationGetsOneForTheContactOfE26() throws Exception {
+        assertEquals(0, run("svc-notification"));
+        assertEquals("svc-notification", claimsOfPrintedToken().get("sub").asText());
+    }
+
+    @Test
+    void onlyTheWorkflowTheWorkerAndNotificationGetOne() {
         assertEquals(2, run("svc-anyone"));
         assertEquals(2, run("6f178b1a-9c0d-4c23-96ad-1e8da3b2ef6d"));
         assertEquals("", out.toString(StandardCharsets.UTF_8));

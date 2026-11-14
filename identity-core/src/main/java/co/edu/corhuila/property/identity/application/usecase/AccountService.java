@@ -1,5 +1,7 @@
 package co.edu.corhuila.property.identity.application.usecase;
 
+import co.edu.corhuila.property.identity.application.port.in.AccountNotFoundException;
+import co.edu.corhuila.property.identity.application.port.in.AccountUseCases.GetContact;
 import co.edu.corhuila.property.identity.application.port.in.AccountUseCases.GetMe;
 import co.edu.corhuila.property.identity.application.port.in.AccountUseCases.Register;
 import co.edu.corhuila.property.identity.application.port.in.AccountUseCases.RegisterCommand;
@@ -15,9 +17,13 @@ import co.edu.corhuila.property.identity.domain.model.Role;
 import co.edu.corhuila.property.identity.domain.model.UserAccount;
 import java.lang.System.Logger.Level;
 import java.time.Clock;
+import java.util.UUID;
 
-/** E-10, E-25 and E-14. It orchestrates; the rules of an account live in UserAccount. */
-public class AccountService implements Register, GetMe, UpgradeToHost {
+/** E-10, E-25, E-14 and E-26. It orchestrates; the rules of an account live in UserAccount. */
+public class AccountService implements Register, GetMe, UpgradeToHost, GetContact {
+
+    /** The only caller of E-26: the service that writes to the guest (security-rules.md, A02). */
+    public static final String CONTACT_READER = "svc-notification";
 
     private static final System.Logger SECURITY = System.getLogger("security");
 
@@ -65,6 +71,20 @@ public class AccountService implements Register, GetMe, UpgradeToHost {
             throw new InvalidStatusTransitionException("only a GUEST account can become a HOST");
         }
         SECURITY.log(Level.INFO, "action=auth.role.changed result=SUCCESS userId={0} from=GUEST to=HOST", account.getId());
+        return account;
+    }
+
+    /**
+     * E-26: the contact of an account, only for svc-notification (403 for anyone else).
+     * Every read is logged with the id, never with the e-mail or the name.
+     */
+    @Override
+    public UserAccount getContact(Caller caller, UUID accountId) {
+        caller.requireService(CONTACT_READER);
+        UserAccount account = accounts.findById(accountId)
+                .orElseThrow(() -> new AccountNotFoundException("no account has the id " + accountId));
+        SECURITY.log(Level.INFO, "action=user.contact.read result=SUCCESS userId={0} caller={1}",
+                accountId, caller.subject());
         return account;
     }
 }

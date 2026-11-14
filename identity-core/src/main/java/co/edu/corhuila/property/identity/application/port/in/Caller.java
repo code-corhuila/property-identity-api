@@ -29,4 +29,11 @@ public record Caller(String subject, List<String> roles, boolean service) {
             throw new NotAuthenticatedException("the token does not name an account");
         }
     }
+
+    /** Only the service credential of that subject (D-C14); a person or another service gets 403. */
+    public void requireService(String allowedSubject) {
+        if (!service || !allowedSubject.equals(subject)) {
+            throw new AccessDeniedException("this credential is not allowed to perform the operation");
+        }
+    }
 }

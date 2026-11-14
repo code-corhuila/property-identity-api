@@ -21,6 +21,13 @@ final class AccountViews {
         }
     }
 
+    /** UserContact (E-26): what notification-service needs to write to a guest, nothing more. */
+    record UserContact(String id, String email, String name) {
+        static UserContact of(UserAccount a) {
+            return new UserContact(a.getId().toString(), a.getEmail().value(), a.getFullName());
+        }
+    }
+
     record AuthResponse(String accessToken, String refreshToken, long expiresIn, UserSummary user) {
         static AuthResponse of(AuthSession s) {
             return new AuthResponse(s.accessToken(), s.refreshToken(), s.expiresIn(), UserSummary.of(s.account()));

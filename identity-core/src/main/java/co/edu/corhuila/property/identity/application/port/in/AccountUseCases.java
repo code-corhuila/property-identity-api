@@ -1,6 +1,7 @@
 package co.edu.corhuila.property.identity.application.port.in;
 
 import co.edu.corhuila.property.identity.domain.model.UserAccount;
+import java.util.UUID;
 
 /** What the service offers about accounts. Inbound adapters depend on these interfaces only. */
 public final class AccountUseCases {
@@ -27,5 +28,10 @@ public final class AccountUseCases {
 
     public interface UpgradeToHost {
         UserAccount upgradeToHost(Caller caller);
+    }
+
+    /** E-26: the e-mail and name of an account, for notification-service only (GAP-017). */
+    public interface GetContact {
+        UserAccount getContact(Caller caller, UUID accountId);
     }
 }

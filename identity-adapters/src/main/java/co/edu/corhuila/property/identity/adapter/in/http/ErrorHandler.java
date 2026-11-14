@@ -2,6 +2,7 @@ package co.edu.corhuila.property.identity.adapter.in.http;
 
 import co.edu.corhuila.property.identity.adapter.in.http.ApiError.ValidationException;
 import co.edu.corhuila.property.identity.application.port.in.AccessDeniedException;
+import co.edu.corhuila.property.identity.application.port.in.AccountNotFoundException;
 import co.edu.corhuila.property.identity.application.port.in.NotAuthenticatedException;
 import co.edu.corhuila.property.identity.domain.model.DomainException;
 import co.edu.corhuila.property.identity.domain.model.InvalidStatusTransitionException;
@@ -53,6 +54,11 @@ public class ErrorHandler {
     @ExceptionHandler(AccessDeniedException.class)
     ResponseEntity<ApiError> forbidden(AccessDeniedException e) {
         return respond(HttpStatus.FORBIDDEN, ApiError.of(ApiError.FORBIDDEN, e.getMessage()));
+    }
+
+    @ExceptionHandler(AccountNotFoundException.class)
+    ResponseEntity<ApiError> accountNotFound(AccountNotFoundException e) {
+        return respond(HttpStatus.NOT_FOUND, ApiError.of(ApiError.NOT_FOUND, e.getMessage()));
     }
 
     @ExceptionHandler(InvalidStatusTransitionException.class)
