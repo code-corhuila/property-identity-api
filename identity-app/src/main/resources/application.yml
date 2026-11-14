@@ -13,6 +13,7 @@ spring:
     # The pool is built in IdentityConfiguration (the composition root), not by auto-configuration.
     exclude: org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
 identity:
+  password-hash-cost: ${PASSWORD_HASH_COST:12}   # bcrypt; less than 12 is refused (security-rules.md A02)
   # postgres (default) or memory. memory is for tests and local development only, never an
   # environment (norm 5.5.2): nothing persists. postgres without DATABASE_URL does not start.
   persistence: ${PERSISTENCE:postgres}
