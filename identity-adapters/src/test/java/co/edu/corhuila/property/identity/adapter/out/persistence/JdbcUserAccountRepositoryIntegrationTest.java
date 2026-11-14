@@ -147,4 +147,15 @@ class JdbcUserAccountRepositoryIntegrationTest {
         assertTrue(repository.findById(account.getId()).isEmpty());
         assertTrue(repository.findByEmail(account.getEmail()).isEmpty());
     }
+
+    @Test
+    void theRoleChangesOnlyFromTheExpectedRole() {
+        UserAccount account = newAccount();
+        repository.register(account, newKey());
+        Instant now = Instant.now();
+
+        assertTrue(repository.changeRole(account.getId(), Role.GUEST, Role.HOST, now));
+        assertEquals(Role.HOST, repository.findById(account.getId()).orElseThrow().getRole());
+        assertFalse(repository.changeRole(account.getId(), Role.GUEST, Role.HOST, now), "already a HOST");
+    }
 }

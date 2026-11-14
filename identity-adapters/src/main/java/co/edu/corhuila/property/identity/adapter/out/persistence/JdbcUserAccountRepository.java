@@ -96,6 +96,12 @@ public class JdbcUserAccountRepository implements UserAccountRepository {
         jdbc.update("UPDATE identity.user_account SET failed_logins = 0, updated_at = ? WHERE id = ?", utc(now), id);
     }
 
+    @Override
+    public boolean changeRole(UUID id, Role from, Role to, Instant now) {
+        return jdbc.update("UPDATE identity.user_account SET role = ?, updated_at = ? WHERE id = ? AND role = ?",
+                to.name(), utc(now), id, from.name()) == 1;
+    }
+
     private Optional<UserAccount> findByKey(String key) {
         return jdbc.query("SELECT " + COLUMNS + " FROM identity.idempotency_key k"
                 + " JOIN identity.user_account a ON a.id = k.user_id WHERE k.key = ?", (rs, n) -> map(rs), key)

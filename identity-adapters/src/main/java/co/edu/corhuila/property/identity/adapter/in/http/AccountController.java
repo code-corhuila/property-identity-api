@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * E-10 POST /register and E-25 GET /users/me. Validates the SHAPE of the input
+ * E-10 POST /register, E-25 GET /users/me and E-14 POST /users/me/upgrade-to-host. Validates the SHAPE of the input
  * (identity-service.yaml) and holds no business rule.
  */
 @RestController
@@ -36,10 +36,13 @@ public class AccountController {
 
     private final AccountUseCases.Register register;
     private final AccountUseCases.GetMe getMe;
+    private final AccountUseCases.UpgradeToHost upgrade;
 
-    public AccountController(AccountUseCases.Register register, AccountUseCases.GetMe getMe) {
+    public AccountController(AccountUseCases.Register register, AccountUseCases.GetMe getMe,
+                             AccountUseCases.UpgradeToHost upgrade) {
         this.register = register;
         this.getMe = getMe;
+        this.upgrade = upgrade;
     }
 
     @PostMapping("/register")
@@ -72,6 +75,11 @@ public class AccountController {
     @GetMapping("/users/me")
     public UserSummary me(HttpServletRequest request) {
         return UserSummary.of(getMe.getMe(AccountViews.caller(request)));
+    }
+
+    @PostMapping("/users/me/upgrade-to-host")
+    public UserSummary upgradeToHost(HttpServletRequest request) {
+        return UserSummary.of(upgrade.upgradeToHost(AccountViews.caller(request)));
     }
 
     static void requireKey(String key, List<FieldError> problems) {

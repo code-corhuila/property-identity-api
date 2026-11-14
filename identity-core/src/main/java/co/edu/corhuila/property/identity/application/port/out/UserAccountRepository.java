@@ -1,6 +1,7 @@
 package co.edu.corhuila.property.identity.application.port.out;
 
 import co.edu.corhuila.property.identity.domain.model.Email;
+import co.edu.corhuila.property.identity.domain.model.Role;
 import co.edu.corhuila.property.identity.domain.model.UserAccount;
 import java.time.Instant;
 import java.util.Optional;
@@ -37,4 +38,11 @@ public interface UserAccountRepository {
 
     /** A successful login sets the count back to 0. */
     void recordSuccessfulLogin(UUID id, Instant now);
+
+    /**
+     * E-14: changes the role only if the account still has {@code from}, in one
+     * conditional update. False when it no longer has it: of two upgrades sent
+     * together, the second finds a HOST.
+     */
+    boolean changeRole(UUID id, Role from, Role to, Instant now);
 }

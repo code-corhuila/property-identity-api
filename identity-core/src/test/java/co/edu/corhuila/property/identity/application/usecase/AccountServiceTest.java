@@ -15,6 +15,7 @@ import co.edu.corhuila.property.identity.application.port.in.NotAuthenticatedExc
 import co.edu.corhuila.property.identity.application.port.out.PasswordHasher;
 import co.edu.corhuila.property.identity.application.port.out.UserAccountRepository;
 import co.edu.corhuila.property.identity.domain.model.Email;
+import co.edu.corhuila.property.identity.domain.model.InvalidStatusTransitionException;
 import co.edu.corhuila.property.identity.domain.model.Role;
 import co.edu.corhuila.property.identity.domain.model.UserAccount;
 import java.time.Clock;
@@ -44,10 +45,24 @@ class AccountServiceTest {
             return new RegisterResult(account, true);
         }
 
-        @Override public Optional<UserAccount> findById(UUID id) { return Optional.ofNullable(byId.get(id)); }
+        /** A copy, as a database gives: changing it changes nothing stored. */
+        @Override public Optional<UserAccount> findById(UUID id) {
+            return Optional.ofNullable(byId.get(id)).map(a -> UserAccount.restore(a.getId(), a.getEmail(),
+                    a.getPasswordHash(), a.getFullName(), a.getRole(), 0, null, a.getCreatedAt(), a.getUpdatedAt()));
+        }
         @Override public Optional<UserAccount> findByEmail(Email email) { return Optional.empty(); }
         @Override public void recordFailedLogin(UUID id, Instant now) { }
         @Override public void recordSuccessfulLogin(UUID id, Instant now) { }
+        @Override public boolean changeRole(UUID id, Role from, Role to, Instant now) {
+            UserAccount stored = byId.get(id);
+            if (stored == null || stored.getRole() != from || !allowChange) {
+                return false;
+            }
+            byId.put(id, UserAccount.restore(id, stored.getEmail(), stored.getPasswordHash(), stored.getFullName(), to,
+                    0, null, stored.getCreatedAt(), now));
+            return true;
+        }
+        boolean allowChange = true;
     }
 
     static final PasswordHasher HASHER = new PasswordHasher() {
@@ -108,5 +123,37 @@ class AccountServiceTest {
             assertFalse(role.permissions().contains("reservas:create"));
             assertFalse(role.permissions().contains("pagos:create"));
         }
+    }
+
+    Caller guest(UserAccount a) {
+        return new Caller(a.getId().toString(), List.of(a.getRole().name()), false);
+    }
+
+    @Test
+    void aGuestBecomesAHostOnce() {
+        UserAccount ana = service.register(new RegisterCommand("ana@example.com", "SecurePass1", "Ana", "key-00001")).account();
+
+        assertEquals(Role.HOST, service.upgradeToHost(guest(ana)).getRole());
+        assertEquals(Role.HOST, accounts.byId.get(ana.getId()).getRole());
+        assertThrows(InvalidStatusTransitionException.class, () -> service.upgradeToHost(guest(ana)));
+    }
+
+    @Test
+    void anAdminCannotBecomeAHostAndAServiceIsRefused() {
+        UUID id = UUID.randomUUID();
+        UserAccount admin = UserAccount.restore(id, new Email("admin@example.com"), "h", "Admin", Role.ADMIN, 0, null,
+                Instant.EPOCH, Instant.EPOCH);
+        accounts.byId.put(id, admin);
+
+        assertThrows(InvalidStatusTransitionException.class, () -> service.upgradeToHost(guest(admin)));
+        assertThrows(AccessDeniedException.class, () -> service.upgradeToHost(new Caller("svc-worker", null, true)));
+    }
+
+    @Test
+    void anUpgradeThatLostTheRaceIs422() {
+        UserAccount ana = service.register(new RegisterCommand("ana@example.com", "SecurePass1", "Ana", "key-00001")).account();
+        accounts.allowChange = false;
+
+        assertThrows(InvalidStatusTransitionException.class, () -> service.upgradeToHost(guest(ana)));
     }
 }
