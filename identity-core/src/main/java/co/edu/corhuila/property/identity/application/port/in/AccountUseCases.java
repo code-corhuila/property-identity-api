@@ -24,4 +24,8 @@ public final class AccountUseCases {
     public interface GetMe {
         UserAccount getMe(Caller caller);
     }
+
+    public interface UpgradeToHost {
+        UserAccount upgradeToHost(Caller caller);
+    }
 }
