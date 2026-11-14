@@ -27,7 +27,12 @@ class SessionIssuerTest {
         signed.add(claims);
         return "signed-token";
     };
-    final RefreshTokenRepository repository = (userId, hash, expiresAt, now) -> stored.add(new Stored(userId, hash, expiresAt));
+    final RefreshTokenRepository repository = new FakeRefreshTokens() {
+        @Override
+        public void store(UUID userId, String hash, Instant expiresAt, Instant now) {
+            stored.add(new Stored(userId, hash, expiresAt));
+        }
+    };
     final SessionIssuer issuer = new SessionIssuer(signer, repository);
     final UserAccount ana = UserAccount.register(new Email("ana@example.com"), "$2a$12$hash", "Ana");
 
