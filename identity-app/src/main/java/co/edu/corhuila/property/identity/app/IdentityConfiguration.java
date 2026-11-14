@@ -16,6 +16,7 @@ import co.edu.corhuila.property.identity.application.port.out.TokenSigner;
 import co.edu.corhuila.property.identity.application.port.out.UserAccountRepository;
 import co.edu.corhuila.property.identity.application.usecase.AccountService;
 import co.edu.corhuila.property.identity.application.usecase.SessionIssuer;
+import co.edu.corhuila.property.identity.application.usecase.SessionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -65,6 +66,12 @@ public class IdentityConfiguration {
     }
 
     @Bean
+    SessionService sessionService(UserAccountRepository accounts, RefreshTokenRepository refreshTokens,
+                                  PasswordHasher hasher, SessionIssuer sessions) {
+        return new SessionService(accounts, refreshTokens, hasher, sessions, Clock.systemUTC());
+    }
+
+    @Bean
     AccountService accountService(UserAccountRepository accounts, PasswordHasher hasher, SessionIssuer sessions) {
         return new AccountService(accounts, hasher, sessions, Clock.systemUTC());
     }
@@ -103,7 +110,7 @@ public class IdentityConfiguration {
     @Bean
     RefreshTokenRepository refreshTokenRepository(Storage storage) {
         return storage.inMemory() ? new InMemoryRefreshTokenRepository()
-                : new JdbcRefreshTokenRepository(storage.jdbc());
+                : new JdbcRefreshTokenRepository(storage.jdbc(), storage.tx());
     }
 
     @Bean

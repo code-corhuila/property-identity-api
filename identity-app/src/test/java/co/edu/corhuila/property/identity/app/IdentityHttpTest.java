@@ -3,6 +3,7 @@ package co.edu.corhuila.property.identity.app;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.matchesPattern;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -20,6 +21,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -63,13 +65,13 @@ class IdentityHttpTest {
                 .andExpect(jsonPath("$.traceId", is("trace-401")));
     }
 
-    /** login and refresh need no token; their endpoints arrive in the next PRs (register: AccountHttpTest). */
+    /** register, login and refresh need no token: without one they validate the body instead of answering 401. */
     @ParameterizedTest
-    @ValueSource(strings = {"/api/v1/login", "/api/v1/refresh"})
+    @ValueSource(strings = {"/api/v1/register", "/api/v1/login", "/api/v1/refresh"})
     void thePublicRoutesDoNotAskForAToken(String path) throws Exception {
-        mvc.perform(get(path))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.error", is("NOT_FOUND")));
+        mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error", is("VALIDATION_ERROR")));
     }
 
     @ParameterizedTest
