@@ -19,8 +19,6 @@ import co.edu.corhuila.property.identity.application.usecase.SessionIssuer;
 import co.edu.corhuila.property.identity.application.usecase.SessionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.security.interfaces.RSAPrivateCrtKey;
 import java.security.interfaces.RSAPublicKey;
 import java.time.Clock;
@@ -84,14 +82,14 @@ public class IdentityConfiguration {
     @Bean
     Rs256Verifier tokenVerifier(@Value("${JWT_PUBLIC_KEY:}") String pem,
                                 @Value("${JWT_PUBLIC_KEY_FILE:}") String file) throws IOException {
-        return new Rs256Verifier(pem(pem, file));
+        return new Rs256Verifier(Pem.read(pem, file));
     }
 
     /** The same public key, for the published copy (E-15 GET /jwks). */
     @Bean
     RSAPublicKey publicKey(@Value("${JWT_PUBLIC_KEY:}") String pem,
                            @Value("${JWT_PUBLIC_KEY_FILE:}") String file) throws IOException {
-        return RsaKeys.readPublic(pem(pem, file));
+        return RsaKeys.readPublic(Pem.read(pem, file));
     }
 
     /**
@@ -102,7 +100,7 @@ public class IdentityConfiguration {
     @Bean
     TokenSigner tokenSigner(@Value("${JWT_PRIVATE_KEY:}") String pem,
                             @Value("${JWT_PRIVATE_KEY_FILE:}") String file, RSAPublicKey publicKey) throws IOException {
-        RSAPrivateCrtKey privateKey = RsaKeys.readPrivate(pem(pem, file));
+        RSAPrivateCrtKey privateKey = RsaKeys.readPrivate(Pem.read(pem, file));
         RsaKeys.requirePair(privateKey, publicKey);
         return new Rs256TokenSigner(privateKey, RsaKeys.keyId(publicKey));
     }
@@ -118,11 +116,6 @@ public class IdentityConfiguration {
         return new SessionIssuer(signer, refreshTokens);
     }
 
-    /** A PEM given inline (literal \n escapes, as a .env file holds it) or as a file. */
-    private static String pem(String inline, String file) throws IOException {
-        return !inline.isBlank() ? inline.replace("\\n", "\n")
-                : !file.isBlank() ? Files.readString(Path.of(file)) : "";
-    }
 
     @Bean
     FilterRegistrationBean<CorrelationFilter> correlationFilter() {
